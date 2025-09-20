@@ -1,9 +1,13 @@
 package school.sptech.prova_ac1;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.http.HttpClient;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -11,6 +15,7 @@ import java.util.List;
 public class UsuarioController {
 
    private final UsuarioRepository repository;
+
 
     public UsuarioController(UsuarioRepository repository) {
         this.repository = repository;
@@ -20,7 +25,12 @@ public class UsuarioController {
     public ResponseEntity<List<Usuario>> buscarTodos() {
 
         try{
-            return ResponseEntity.ok().body(repository.findAll());
+           List<Usuario> usuarios = repository.findAll();
+            if(usuarios.isEmpty()){
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            }
+
+            return ResponseEntity.status(HttpStatus.OK).body(usuarios);
         }catch(Error e){
             return ResponseEntity.internalServerError().build();
         }
@@ -30,9 +40,12 @@ public class UsuarioController {
     @PostMapping
     public ResponseEntity<Usuario> criar( @RequestBody Usuario usuario) {
         try{
-            return ResponseEntity.status(201).body(repository.save(usuario));
-        }catch(Error e){
-            return ResponseEntity.internalServerError().build();
+            if((repository.findByCpf(usuario.getCpf()).stream().count() >0)||(repository.findByEmail(usuario.getEmail()).stream().count() >0)){
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            };
+            return ResponseEntity.status(HttpStatus.CREATED).body(repository.save(usuario));
+        }catch(Exception e){
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
 
     }
@@ -61,39 +74,59 @@ public class UsuarioController {
     }
 
 
-    @GetMapping("/filtro-data?nascimento={nascimento}")
-    public ResponseEntity<List<Usuario>> buscarPorDataNascimento(LocalDate nascimento) {
+    @GetMapping("/filtro-data")
+    public ResponseEntity<List<Usuario>> buscarPorDataNascimento(@RequestParam LocalDate nascimento) {
         try{
-            return ResponseEntity.ok().body(repository.findByDataNascimeto(nascimento));
+            try{
+                List<Usuario> usuarios = repository.findByDataNascimentoAfter(nascimento);
+                if (usuarios.isEmpty()) {
+                    return ResponseEntity.noContent().build(); // 204
+                }
+
+                return ResponseEntity.status(HttpStatus.OK).body(usuarios);
+            }catch(Error e){
+                return ResponseEntity.internalServerError().build();
+            }
 
         }catch(Error e) {
             return ResponseEntity.internalServerError().build();
         }
     }
-@PutMapping("{id}")
+    @PutMapping("{id}")
     public ResponseEntity<Usuario> atualizar(
             @PathVariable Integer id,
             @RequestBody Usuario usuario
     ) {
-        try{
-            return repository.findById(id).map(usuarioAtual->{
-                if(usuario.getNome() !=null){
-                    usuarioAtual.setNome(usuario.getNome());
-                }
-                if(usuario.getCpf() !=null){
-                    usuarioAtual.setCpf(usuario.getCpf());
-                }
-                if(usuario.getDataNascimento() !=null){
-                    usuarioAtual.setDataNascimento(usuario.getDataNascimento());
-                }
-                if(usuario.getSenha() !=null){
-                    usuarioAtual.setSenha(usuario.getSenha());
-                }
+        try {
+            if((repository.findByCpf(usuario.getCpf()).stream().anyMatch(idIgual ->!idIgual.getId().equals(id)))||(repository.findByEmail(usuario.getEmail()).stream().anyMatch(idIgual->!idIgual.getId().equals(id)))) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            return repository.findById(id)
+                    .map(usuarioAtual -> {
+                        if (usuario.getNome() != null) {
+                            usuarioAtual.setNome(usuario.getNome());
+                        }
+                        if (usuario.getEmail() != null) {
+                            usuarioAtual.setEmail(usuario.getEmail());
+                        }
+                        if (usuario.getCpf() != null) {
+                            usuarioAtual.setCpf(usuario.getCpf());
+                        }
+                        if (usuario.getDataNascimento() != null) {
+                            usuarioAtual.setDataNascimento(usuario.getDataNascimento());
+                        }
+                        if (usuario.getSenha() != null) {
+                            usuarioAtual.setSenha(usuario.getSenha());
+                        }
 
-                return repository.save(usuario);
-            }).orElseGet(() -> ResponseEntity.notFound().build());
-        }catch(Error e) {
+                        Usuario atualizado = repository.save(usuarioAtual);
+                        return ResponseEntity.ok(atualizado);
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+
+        } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
     }
+
 }

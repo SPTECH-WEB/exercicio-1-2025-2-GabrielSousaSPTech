@@ -7,6 +7,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
-    List<Usuario> findByDataNascimeto(LocalDate dataNascimento);
+    List<Usuario> findByDataNascimentoAfter(LocalDate dataNascimento);
+    List<Usuario> findByCpf(String cpf);
+    List<Usuario> findByEmail(String email);
 
 }
